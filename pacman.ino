@@ -33,22 +33,23 @@ unsigned long   timerStart;   // for counting FPS
 int16_t         forDelay;     // calculated ms to delay after each frame creation
 
 
+// initial setup at boot
 
 void setup() {
   uint16_t i, j;
   randomSeed(analogRead(0));
   Serial.begin(9600);
+  // setup the screen
   tft.reset();
-
   tft.begin(ID);
-
   tft.setRotation(1);
   tft.setTextSize(2);
   tft.fillScreen(BLACK);
+  // draw the walls
   printScene();
 
 
-
+  // ghosts & pacman settings
   ghosts[0].coords.x = 2;
   ghosts[0].coords.y = 2;
   ghosts[0].color = RED;
@@ -59,12 +60,10 @@ void setup() {
   ghosts[1].color = CYAN;
   ghosts[1].direction = rand() % 2 + 2;
 
-
   ghosts[2].coords.x = 2;
   ghosts[2].coords.y = SCRHEIGHT - 1;
   ghosts[2].color = MAGENTA;
   ghosts[2].direction = rand() % 2;
-
 
   ghosts[3].coords.x = SCRWIDTH - 1 ;
   ghosts[3].coords.y = SCRHEIGHT - 1;
@@ -85,6 +84,7 @@ void setup() {
   pacman.lastcoords.x = (pacman.coords.x - 1) * SPRITE_WIDTH;
   pacman.lastcoords.y = (pacman.coords.y - 1) * SPRITE_HEIGHT;
 
+  // some debug stuff
   for (i = 0; i < 4; i++) {
     Serial.print("i: "); Serial.print(PACFRAMES[i][i]);
     Serial.print('\n');
@@ -92,74 +92,78 @@ void setup() {
 
 }
 
+// program main loop
 void loop() {
-
-  // put your main code here, to run repeatedly:
   uint16_t i, j, tempX, tempY;
 
-  //uint8_t mapCoordX, mapCoordY;
+  // some temporary variabless
   uint8_t tempDirection, freeDirectionBits;
   bool dirWalkable, isDeadEnd;
 
-
+  // do it forever
   while (true) {
     timerStart = millis();
-    pacman.stepsCounter += 2;
+    pacman.stepsCounter += 2; // used for drawing animation frames - sprite width / 2 = 8 anim frame between tiles
 
+    // calculate new frame's position
     tempX = (pacman.coords.x - 1) * SPRITE_WIDTH + pacman.stepsCounter * DIRMATRIX[pacman.direction].x;
     tempY = (pacman.coords.y - 1) * SPRITE_HEIGHT + pacman.stepsCounter * DIRMATRIX[pacman.direction].y;
+    // delete the pacman from the last frame's position
     tft.drawBitmap(pacman.lastcoords.x, pacman.lastcoords.y , PACDELETE[pacman.direction], SPRITE_WIDTH, SPRITE_HEIGHT, BLACK);
+    // draw it on the new coords
     tft.drawBitmap(tempX, tempY, PAC[ PACFRAMES[pacman.direction][ (pacman.stepsCounter >> 1) % 4 ] ], SPRITE_WIDTH, SPRITE_HEIGHT,  pacman.color);
 
-
+    // if  counter=16 then we moved one full tile
+    // needs to recheck free directions
     if (pacman.stepsCounter >= SPRITE_WIDTH)  {
       pacman.stepsCounter = 0;
 
+      // setup new coords based on the current facing direction
       pacman.coords.x += DIRMATRIX[pacman.direction].x ;
       pacman.coords.y += DIRMATRIX[pacman.direction].y ;
 
+      // clear the tile in our inner MAP 
       MAP[pacman.coords.y][pacman.coords.x]=' ';
       
       pacman.lastdirection = (pacman.direction + 2) % 4;
 
       dirWalkable = false;
       isDeadEnd = false;
+      // get the surrounding walls and free ways, and make a bitmask from this info
       freeDirectionBits = getSurroundingWalls(pacman.coords.x, pacman.coords.y);
 
+      // if there is only one free direction, then its a dead end, we can turn back
       if (freeDirectionBits == 19 || freeDirectionBits == 11 || freeDirectionBits == 25 || freeDirectionBits == 26) {
         isDeadEnd = true;
       }
 
+      // itereate until we find a correct direction to move
       while (!dirWalkable) {
         tempDirection = rand() % 4;
         dirWalkable = true;
-        // if there is a wall in the direction
+        // if there is a wall in that direction, then mark it as nonwalkable
         if (MAP[pacman.coords.y + DIRMATRIX[tempDirection].y][pacman.coords.x + DIRMATRIX[tempDirection].x] == 'x'
             || MAP[pacman.coords.y + DIRMATRIX[tempDirection].y][pacman.coords.x + DIRMATRIX[tempDirection].x] == 'X') {
           dirWalkable = false;
         }
-
+        // if we came from that direction, it's nonwalkable, except if we are currently in a dead end
         if (tempDirection == pacman.lastdirection && !isDeadEnd )  {
           dirWalkable = false;
         }
 
       }
 
+      // setup new directions
       pacman.direction = tempDirection;
       pacman.lastFreeDirectionBits = freeDirectionBits;
 
     }
 
+    // save our current coordinates, and then we can use them in the next frame
     pacman.lastcoords.x = tempX;
     pacman.lastcoords.y = tempY;
 
-
-
-
-
-
-
-
+    // same things with all the ghosts
     for (i = 0; i < 4; i++) {
       ghosts[i].stepsCounter += 2;
 
@@ -217,28 +221,22 @@ void loop() {
     }
 
 
-    
+    // some debug stuff
         Serial.print("Frame: "); Serial.print(millis() - timerStart);
         Serial.print("Delay: "); Serial.print(forDelay);
         Serial.print('\n');
     
 
+    // calculate the time what was used for generating this frame
     forDelay = FRAMEMS - (millis() - timerStart);
 
     (forDelay > 0) ? delay(forDelay) : delay(0);
 
-
-
-
-  }
-
-
-
-
+  } // end of infinite loop
 }
 
 
-
+// printing a string to screen - not used
 void printChar(uint8_t x, uint8_t y, uint8_t ch) {
   tft.setCursor(x * CHRWIDTH, y * CHRHEIGHT);
   tft.print(char(ch));
@@ -263,13 +261,15 @@ uint8_t getSurroundingWalls(uint8_t x, uint8_t y) {
   return tempBits;
 }
 
+// draw all the walls
+// scene is stored in MAP[] array -> constants.h
+
 void printScene() {
   uint8_t i, j = 0;
   tft.setTextColor(BLUE);
   tft.fillScreen(BLACK);
   tft.setCursor(0, 0);
 
-  // print out the scene
 
   char tempWalls, tempBits;
   uint8_t printSpriteNo = 0;
@@ -287,6 +287,7 @@ void printScene() {
         tempColor = BLUE;
       }
 
+      // see bitmasks at the getSurroundingWalls function
       tempBits = getSurroundingWalls(i, j);
 
       switch (tempBits) {
@@ -324,9 +325,7 @@ void printScene() {
           break;
       }
 
-
-
-      //tft.drawBitmap((i - 1)*SPRITE_WIDTH, (j - 1)*SPRITE_HEIGHT, CLEARSPRITE[0], SPRITE_HEIGHT, SPRITE_WIDTH, BLACK);
+      // draw the correct tile
       tft.drawBitmap((i - 1)*SPRITE_WIDTH, (j - 1)*SPRITE_HEIGHT, WALL[printSpriteNo], SPRITE_HEIGHT, SPRITE_WIDTH, tempColor);
 
     }
