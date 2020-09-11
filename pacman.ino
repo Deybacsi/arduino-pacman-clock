@@ -8,7 +8,10 @@
 
 MCUFRIEND_kbv tft;
 
+// Ez az én kijelzőm
 PROGMEM const uint16_t ID = 0x6809;
+
+// Ez meg a Gergőé :)
 //PROGMEM const uint16_t ID = 0x9341;
 
 // Assign human-readable names to some common 16-bit color values:
